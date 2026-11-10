@@ -4,8 +4,5 @@ project_id = "interview-question-bank"
 enable_signup = false
 enable_anonymous_sign_ins = false
 
-[auth.email]
-enable_signup = false
-
 [functions.mcp]
 verify_jwt = false
