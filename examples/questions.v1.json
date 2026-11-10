@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "category": "written",
+      "recruitment": "campus",
+      "topic": "2026 年固件开发练习（示例）",
+      "prompt": "嵌入式 C 中，volatile 变量和原子操作有什么区别？",
+      "answer": "volatile 表明对象的访问属于可观察行为。它本身不保证访问原子性，也不建立线程间同步。共享数据的原子访问和排序要使用平台或语言提供的原子与同步机制。",
+      "company": "示例公司",
+      "source": "示例题",
+      "tags": ["C 语言", "嵌入式"],
+      "notes": "可以追问中断服务程序中的共享计数器。"
+    }
+  ]
+}
