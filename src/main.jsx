@@ -205,33 +205,96 @@ function Exam({ rows }) {
   </>;
 }
 
-function QuestionEditor({ initial, draft, companies, tags, topics, onClose, onSave, onApprove }) {
-  const [content, setContent] = useState(initial);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-  const [tagInput, setTagInput] = useState('');
-  const dialog = useRef(null);
-  useEffect(() => { dialog.current.showModal(); }, []);
-  const field = name => ({ value: content[name], onChange: event => setContent(current => ({ ...current, [name]: event.target.value })) });
-  const typedTags = () => tagInput.split(/[,，、]/).map(tag => tag.trim()).filter(Boolean);
+function splitTags(value) {
+  return value.split(/[,，、]/).map(tag => tag.trim()).filter(Boolean);
+}
+
+function QuestionFields({ entry, update }) {
+  const { id, content, tagInput } = entry;
+  const tagInputId = `tag-input-${id}`;
+  const field = name => ({
+    value: content[name],
+    onChange: event => update({ content: { ...content, [name]: event.target.value } }),
+  });
   function addTags(event) {
     event.preventDefault();
-    setContent(current => ({ ...current, tags: [...new Set([...current.tags, ...typedTags()])] }));
-    setTagInput('');
+    update({
+      content: { ...content, tags: [...new Set([...content.tags, ...splitTags(tagInput)])] },
+      tagInput: '',
+    });
+  }
+  return <>
+    <label>题干<textarea id={`question-prompt-${id}`} {...field('prompt')} maxLength={textFields.prompt.max} rows={3} required placeholder="输入题目内容" /></label>
+    <label>参考答案<textarea {...field('answer')} maxLength={textFields.answer.max} rows={4} placeholder="填写参考答案或解题思路" /></label>
+    <label>来源<input {...field('source')} maxLength={textFields.source.max} placeholder="网页链接或来源说明" /></label>
+    <div className="tag-editor">
+      <label htmlFor={tagInputId}>知识点</label>
+      <div className="tag-input"><input id={tagInputId} value={tagInput} list="knowledge-tags" placeholder="输入标签，按回车添加"
+        onChange={event => update({ tagInput: event.target.value })}
+        onKeyDown={event => { if (event.key === 'Enter') addTags(event); }} />
+        <button type="button" className="button secondary" disabled={!tagInput.trim()} onClick={addTags}>添加</button></div>
+      <div className="chips">{content.tags.map(tag => <button key={tag} type="button" className="chip chip-remove" aria-label={`移除 ${tag}`}
+        onClick={() => update({ content: { ...content, tags: content.tags.filter(item => item !== tag) } })}>{tag}<X size={12} /></button>)}</div>
+    </div>
+    <label>补充说明<textarea {...field('notes')} maxLength={textFields.notes.max} rows={3} placeholder="记录易错点或追问" /></label>
+  </>;
+}
+
+function QuestionEditor({ initial, draft, multiple, companies, tags, topics, onClose, onSave, onApprove }) {
+  const [metadata, setMetadata] = useState(() => {
+    const { topic, category, company, recruitment } = initial;
+    return { topic, category, company, recruitment };
+  });
+  const [entries, setEntries] = useState([{ id: 0, content: initial, tagInput: '' }]);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const dialog = useRef(null);
+  const nextId = useRef(1);
+  const addedId = useRef(null);
+  useEffect(() => { dialog.current.showModal(); }, []);
+  useEffect(() => {
+    if (addedId.current === null) return;
+    dialog.current.querySelector(`#question-prompt-${addedId.current}`)?.focus();
+    addedId.current = null;
+  }, [entries.length]);
+
+  const field = name => ({
+    value: metadata[name],
+    onChange: event => setMetadata(current => ({ ...current, [name]: event.target.value })),
+  });
+  function addQuestion() {
+    const id = nextId.current++;
+    addedId.current = id;
+    setEntries(current => [...current, { id, content: emptyQuestion, tagInput: '' }]);
+  }
+  function updateEntry(id, change) {
+    setEntries(current => current.map(entry => entry.id === id ? { ...entry, ...change } : entry));
   }
   function selectTopic(event) {
     const selection = topics.get(event.target.value);
     if (!selection) return;
     const { topic, category, company, recruitment } = selection.content;
-    setContent(current => ({ ...current, topic, category, company, recruitment }));
+    setMetadata({ topic, category, company, recruitment });
   }
   async function submit(event) {
     event.preventDefault();
-    const action = event.nativeEvent.submitter?.value === 'approve' ? onApprove : onSave;
+    if (pending) return;
     setError('');
     setPending(true);
     try {
-      await action(normalizeQuestion({ ...content, tags: [...content.tags, ...typedTags()] }));
+      const { topic, company, category, recruitment } = metadata;
+      const questions = entries.map(({ content, tagInput }, index) => {
+        try {
+          return normalizeQuestion({
+            ...content, topic, company, category, recruitment, tags: [...content.tags, ...splitTags(tagInput)],
+          });
+        } catch (failure) {
+          if (entries.length === 1) throw failure;
+          throw new Error(`第 ${index + 1} 题 · ${errorText(failure)}`);
+        }
+      });
+      if (event.nativeEvent.submitter?.value === 'approve') await onApprove(questions[0]);
+      else await onSave(questions);
       onClose();
     } catch (failure) {
       setError(errorText(failure));
@@ -252,38 +315,43 @@ function QuestionEditor({ initial, draft, companies, tags, topics, onClose, onSa
         <p className="prewrap original-prompt">{draft.base_content.prompt}</p><QuestionDetails question={draft.base_content} />
       </aside>}
       <form className="editor-form" onSubmit={submit}>
-        {topics.size > 0 && <label>沿用已有主题<select value={topics.has(topicKey(content)) ? topicKey(content) : ''} onChange={selectTopic}>
+        {topics.size > 0 && <label>沿用已有主题<select value={topics.has(topicKey(metadata)) ? topicKey(metadata) : ''} onChange={selectTopic}>
           <option value="">选择主题并带入招聘信息</option>
           {[...topics.values()].map(({ key, content: saved }) => <option key={key} value={key}>
             {[saved.topic, saved.company, categories[saved.category], recruitmentLabels[saved.recruitment]].filter(Boolean).join(' · ')}
           </option>)}
         </select></label>}
         <label>主题<input {...field('topic')} maxLength={textFields.topic.max}
-          placeholder="例如 2026 年大疆固件开发，留空作为单题" /></label>
+          placeholder="填写主题名称，可留空" /></label>
+        <div className="form-grid">
+          <label>公司<input {...field('company')} maxLength={textFields.company.max} placeholder="填写公司名称，可留空" /></label>
+          {companies.length > 0 && <label>已有公司<select {...field('company')} value={companies.includes(metadata.company) ? metadata.company : ''}>
+            <option value="">选择已有公司</option>
+            {companies.map(company => <option key={company} value={company}>{company}</option>)}
+          </select></label>}
+        </div>
         <div className="form-grid">
           <label>类别<select {...field('category')}>{Object.entries(categories).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           <label>招聘类型<select {...field('recruitment')}>{Object.entries(recruitmentLabels).map(([key, label]) =>
             <option key={key} value={key}>{label}</option>)}</select></label>
-          <label>公司<input {...field('company')} maxLength={textFields.company.max} list="companies" placeholder="选择或填写公司" /></label>
-          <datalist id="companies">{companies.map(company => <option key={company} value={company} />)}</datalist>
         </div>
-        <label>题干<textarea {...field('prompt')} maxLength={textFields.prompt.max} rows={3} required placeholder="输入题目内容" /></label>
-        <label>参考答案<textarea {...field('answer')} maxLength={textFields.answer.max} rows={4} placeholder="填写参考答案或解题思路" /></label>
-        <label>来源<input {...field('source')} maxLength={textFields.source.max} placeholder="网页链接或来源说明" /></label>
-        <div className="tag-editor">
-          <label htmlFor="tag-input">知识点</label>
-          <div className="tag-input"><input id="tag-input" value={tagInput} list="knowledge-tags" placeholder="输入标签，按回车添加"
-            onChange={event => setTagInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') addTags(event); }} />
-            <button type="button" className="button secondary" disabled={!tagInput.trim()} onClick={addTags}>添加</button></div>
-          <datalist id="knowledge-tags">{tags.map(tag => <option key={tag} value={tag} />)}</datalist>
-          <div className="chips">{content.tags.map(tag => <button key={tag} type="button" className="chip chip-remove" aria-label={`移除 ${tag}`}
-            onClick={() => setContent(current => ({ ...current, tags: current.tags.filter(item => item !== tag) }))}>{tag}<X size={12} /></button>)}</div>
-        </div>
-        <label>补充说明<textarea {...field('notes')} maxLength={textFields.notes.max} rows={3} placeholder="记录易错点或追问" /></label>
+        {multiple && <p className="editor-hint">本次录入的题目共用上方的主题和招聘信息。</p>}
+        <datalist id="knowledge-tags">{tags.map(tag => <option key={tag} value={tag} />)}</datalist>
+        {entries.map((entry, index) => <section className={multiple ? 'editor-question editor-question-card' : 'editor-question'}
+          key={entry.id} aria-labelledby={multiple ? `question-title-${entry.id}` : undefined}>
+          {multiple && <div className="editor-question-head">
+            <h3 id={`question-title-${entry.id}`}>第 {index + 1} 题</h3>
+            {entries.length > 1 && <button type="button" className="icon-button" aria-label={`移除第 ${index + 1} 题`} disabled={pending}
+              onClick={() => setEntries(current => current.filter(item => item.id !== entry.id))}><Trash2 size={16} /></button>}
+          </div>}
+          <QuestionFields entry={entry} update={change => updateEntry(entry.id, change)} />
+        </section>)}
         {error && <p className="notice error" role="alert">{error}</p>}
         <div className="dialog-actions">
+          {multiple && <button type="button" className="button secondary" disabled={pending} onClick={addQuestion}><Plus size={17} />再加一题</button>}
           {draft && <button className="button secondary" value="save" disabled={pending}>保存草稿</button>}
-          <button className="button primary" value={draft ? 'approve' : 'save'} disabled={pending}>{pending ? '正在保存…' : draft ? '确认入库' : '保存题目'}<Check size={16} /></button>
+          <button className="button primary" value={draft ? 'approve' : 'save'} disabled={pending}>{pending ? '正在保存…'
+            : draft ? '确认入库' : entries.length > 1 ? `保存 ${entries.length} 道题` : '保存题目'}<Check size={16} /></button>
         </div>
       </form>
     </div>
@@ -390,10 +458,12 @@ function Bank() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function save(content) {
+  function save(contents) {
+    const [content] = contents;
     if (editor.draft) return mutate(() => updateRow('question_drafts', editor.row, { content }), '草稿已保存。');
     if (editor.row) return mutate(() => updateRow('questions', editor.row, { content }), '题目已更新。');
-    return mutate(() => result(db.from('questions').insert({ content })), '题目已添加。');
+    const rows = contents.map(question => ({ content: question }));
+    return mutate(() => result(db.from('questions').insert(rows)), `已添加 ${rows.length} 道题。`);
   }
 
   function approve(content) {
@@ -495,7 +565,7 @@ function Bank() {
           detail={questions.length ? '换个公司、知识点或掌握状态试试。' : '录入题干和参考答案，之后可以随时回来练习。'}
           action={!questions.length ? newButton : null} />)}
     </main>
-    {editor && <QuestionEditor initial={editor.row?.content ?? editor.initial ?? emptyQuestion} draft={editor.draft ? editor.row : null}
+    {editor && <QuestionEditor initial={editor.row?.content ?? editor.initial ?? emptyQuestion} draft={editor.draft ? editor.row : null} multiple={!editor.row}
       companies={companies} tags={tags} topics={topics} onClose={() => setEditor(null)} onSave={save} onApprove={approve} />}
     {deletion && <Confirm busy={busy} title={deletion.draft ? '丢弃这条草稿？' : '删除这道题？'}
       detail={deletion.draft ? '草稿会从待审核列表移除。' : '题目及其掌握状态将被删除。'} onCancel={() => setDeletion(null)} onConfirm={remove} />}

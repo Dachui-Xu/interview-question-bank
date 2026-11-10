@@ -147,14 +147,19 @@ dialog::backdrop { background: #18243959; backdrop-filter: blur(3px); }
 .dialog-head h2 { margin-top: 5px; }
 .editor-form { display: grid; gap: 13px; min-width: 0; }
 .editor-grid { display: grid; grid-template-columns: minmax(0, .88fr) minmax(0, 1fr); gap: 19px; align-items: start; }
-.form-grid { display: grid; grid-template-columns: .7fr .8fr 1fr; gap: 10px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.editor-hint { color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.editor-question { display: grid; gap: 13px; min-width: 0; }
+.editor-question-card { padding: 14px; border: 1px solid var(--line); border-radius: 15px; }
+.editor-question-head { display: flex; align-items: center; justify-content: space-between; min-height: 24px; }
+.editor-question-head h3 { font-size: .95rem; }
 .original { min-width: 0; padding: 16px; border-radius: 15px; background: #f6f8fc; }
 .original h3 { margin-bottom: 11px; font-size: .95rem; }
 .original-prompt { margin: 11px 0; line-height: 1.55; }
 .tag-editor { display: grid; gap: 6px; }
 .tag-input { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
 .chip-remove:hover { background: #e6eaf1; }
-.dialog-actions { display: flex; justify-content: end; gap: 8px; margin-top: 7px; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; margin-top: 7px; }
 .confirm { max-width: 400px; }
 .confirm p { color: var(--muted); margin: 12px 0 20px; line-height: 1.55; }
 
