@@ -22,7 +22,7 @@ npm run dev
    ```powershell
    supabase login
    supabase link --project-ref <项目引用>
-   supabase db push
+   supabase db push --remote
    ```
 
 3. 在 Supabase 的 Edge Function Secrets 设置 `QUESTION_BANK_OWNER_ID` 为上一步的用户 UUID。另生成至少 32 字节的随机值，将其设置为 `QUESTION_BANK_MCP_TOKEN`。例如用密码管理器生成 64 字符的随机字符串。将令牌保存在密码管理器。Edge Function 读取 Supabase 自动注入的服务器密钥，网页只使用公开客户端 key。
