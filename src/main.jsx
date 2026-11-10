@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Check, ChevronRight,
-  Eye, FileText, Layers, LogOut, Pencil, Plus, RefreshCw, Sparkles, Trash2, Upload, X,
+  Eye, FileText, Github, Layers, LogOut, Pencil, Plus, RefreshCw, Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import {
   categories, emptyQuestion, masteryLabels, normalizeQuestion, parseQuestionFile, recruitmentLabels, sourceUrl, textFields, topicKey,
 } from '../supabase/functions/_shared/question.mjs';
 import { db, errorText, loadBank, result, updateRow } from './api';
+import { ImageOwner, MarkdownField, MarkdownText, saveImages } from './markdown';
 import './style.css';
 
 const tabs = { library: '题库', practice: '练习', drafts: '草稿' };
@@ -23,14 +24,21 @@ function groupTopics(rows) {
       singles.push(row);
       continue;
     }
-    if (!groups.has(key)) groups.set(key, { key, content: row.content, rows: [] });
-    groups.get(key).rows.push(row);
+    if (!groups.has(key)) groups.set(key, { key, content: row.content, rows: [], source: '' });
+    const group = groups.get(key);
+    group.rows.push(row);
+    group.source ||= row.content.source;
   }
   return { groups, singles };
 }
 
 function Brand() {
   return <a className="brand" href="#library"><span className="brand-icon"><BookOpen size={19} /></span>答题间</a>;
+}
+
+function RepositoryLink() {
+  return <a className="icon-button repository-link" href="https://github.com/Dachui-Xu/interview-question-bank"
+    target="_blank" rel="noreferrer" aria-label="GitHub 项目仓库" title="GitHub 项目仓库"><Github size={18} /></a>;
 }
 
 function Artwork() {
@@ -62,7 +70,7 @@ function Login({ loading }) {
     }
   }
   return <div className="entry page">
-    <header className="entry-header"><Brand /><span className="private-note">个人学习空间</span></header>
+    <header className="entry-header"><Brand /><RepositoryLink /></header>
     <main className="entry-layout">
       <section className="entry-story">
         <span className="eyebrow">笔试 · 面试</span>
@@ -97,7 +105,9 @@ function App() {
     });
     return () => data.subscription.unsubscribe();
   }, []);
-  return session ? <Bank key={session.user.id} /> : <Login loading={loading} />;
+  return session ? <ImageOwner.Provider value={session.user.id}>
+    <Bank key={session.user.id} ownerId={session.user.id} />
+  </ImageOwner.Provider> : <Login loading={loading} />;
 }
 
 function SelectFilter({ name, value, options, onChange }) {
@@ -131,14 +141,18 @@ function Metadata({ question, mastery }) {
   </div>;
 }
 
-function QuestionDetails({ question }) {
-  const link = sourceUrl(question.source);
+function Source({ value }) {
+  const link = sourceUrl(value);
+  return link
+    ? <a className="source-link" href={link} target="_blank" rel="noreferrer">{value}<ArrowUpRight size={15} /></a>
+    : <MarkdownText>{value}</MarkdownText>;
+}
+
+function QuestionDetails({ question, sharedSource }) {
   return <div className="question-details">
-    <section><h4>参考答案</h4><p className="prewrap">{question.answer || '尚未填写参考答案。'}</p></section>
-    {question.notes && <section><h4>补充说明</h4><p className="prewrap">{question.notes}</p></section>}
-    {question.source && <section><h4>来源</h4>{link
-      ? <a className="source-link" href={link} target="_blank" rel="noreferrer">{question.source}<ArrowUpRight size={15} /></a>
-      : <p className="prewrap">{question.source}</p>}</section>}
+    <section><h4>参考答案</h4><MarkdownText>{question.answer || '尚未填写参考答案。'}</MarkdownText></section>
+    {question.notes && <section><h4>补充说明</h4><MarkdownText>{question.notes}</MarkdownText></section>}
+    {question.source && question.source !== sharedSource && <section><h4>来源</h4><Source value={question.source} /></section>}
   </div>;
 }
 
@@ -147,7 +161,7 @@ function Empty({ title, detail, action }) {
     <h3>{title}</h3><p>{detail}</p>{action}</section>;
 }
 
-function Practice({ rows, busy, onMark }) {
+function Practice({ rows, busy, onMark, sharedSource }) {
   const [index, setIndex] = useState(0);
   const activeIndex = Math.min(index, rows.length - 1);
   const row = rows[activeIndex];
@@ -155,18 +169,18 @@ function Practice({ rows, busy, onMark }) {
     setIndex(activeIndex + step);
   }
   if (!row) return <Empty title="没有可练习的题目" detail="可以清除筛选，或先到题库新增一题。" />;
-  return <PracticeCard key={row.id} row={row} index={activeIndex} total={rows.length} move={move} busy={busy} onMark={onMark} />;
+  return <PracticeCard key={row.id} row={row} index={activeIndex} total={rows.length} move={move} busy={busy} onMark={onMark} sharedSource={sharedSource} />;
 }
 
-function PracticeCard({ row, index, total, move, busy, onMark }) {
+function PracticeCard({ row, index, total, move, busy, onMark, sharedSource }) {
   const [revealed, setRevealed] = useState(false);
   return <article className="practice-card card">
     <div className="practice-progress"><span>第 {index + 1} 题</span><span>{index + 1} / {total}</span></div>
     <progress aria-label="当前练习位置" value={index + 1} max={total} />
     <Metadata question={row.content} mastery={row.mastery} />
-    <h2 className="prewrap">{row.content.prompt}</h2>
+    <MarkdownText className="question-prompt practice-prompt">{row.content.prompt}</MarkdownText>
     {revealed
-      ? <><QuestionDetails question={row.content} /><div className="mark-row" aria-label="掌握状态">
+      ? <><QuestionDetails question={row.content} sharedSource={sharedSource} /><div className="mark-row" aria-label="掌握状态">
         {Object.entries(masteryLabels).map(([value, label]) =>
           <button key={value} className={`button secondary ${row.mastery === value ? 'selected' : ''}`}
             aria-pressed={row.mastery === value} disabled={busy} onClick={() => onMark(row, value)}>{label}</button>)}
@@ -179,7 +193,7 @@ function PracticeCard({ row, index, total, move, busy, onMark }) {
   </article>;
 }
 
-function Exam({ rows }) {
+function Exam({ rows, sharedSource }) {
   const [paper] = useState(rows);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -191,10 +205,10 @@ function Exam({ rows }) {
     </div>
     <div className="card-list">{paper.map((row, index) => <article className="card question-card" key={row.id}>
       <span className="eyebrow">第 {index + 1} 题</span>
-      <h3 className="prewrap">{row.content.prompt}</h3>
+      <MarkdownText className="question-prompt">{row.content.prompt}</MarkdownText>
       {submitted ? <>
-        <div className="exam-response"><h4>我的作答</h4><p className="prewrap">{answers[row.id] || '未作答'}</p></div>
-        <QuestionDetails question={row.content} />
+        <div className="exam-response"><h4>我的作答</h4><MarkdownText>{answers[row.id] || '未作答'}</MarkdownText></div>
+        <QuestionDetails question={row.content} sharedSource={sharedSource} />
       </> : <label>我的作答<textarea rows={4} placeholder="在这里写下你的答案或解题思路"
         value={answers[row.id] ?? ''} onChange={event => setAnswers(current => ({ ...current, [row.id]: event.target.value }))} /></label>}
     </article>)}</div>
@@ -209,12 +223,16 @@ function splitTags(value) {
   return value.split(/[,，、]/).map(tag => tag.trim()).filter(Boolean);
 }
 
-function QuestionFields({ entry, update }) {
+function QuestionFields({ entry, update, staged, pending }) {
   const { id, content, tagInput } = entry;
   const tagInputId = `tag-input-${id}`;
-  const field = name => ({
+  const markdownField = (name, rows, placeholder, required = false) => ({
+    id: `question-${name}-${id}`,
+    label: textFields[name].label,
     value: content[name],
-    onChange: event => update({ content: { ...content, [name]: event.target.value } }),
+    onChange: value => update({ content: { ...content, [name]: value } }),
+    maxLength: textFields[name].max,
+    rows, placeholder, required, staged, pending,
   });
   function addTags(event) {
     event.preventDefault();
@@ -224,9 +242,8 @@ function QuestionFields({ entry, update }) {
     });
   }
   return <>
-    <label>题干<textarea id={`question-prompt-${id}`} {...field('prompt')} maxLength={textFields.prompt.max} rows={3} required placeholder="输入题目内容" /></label>
-    <label>参考答案<textarea {...field('answer')} maxLength={textFields.answer.max} rows={4} placeholder="填写参考答案或解题思路" /></label>
-    <label>来源<input {...field('source')} maxLength={textFields.source.max} placeholder="网页链接或来源说明" /></label>
+    <MarkdownField {...markdownField('prompt', 3, '用 Markdown 写题干，或将图片拖到这里', true)} />
+    <MarkdownField {...markdownField('answer', 4, '填写参考答案或解题思路')} />
     <div className="tag-editor">
       <label htmlFor={tagInputId}>知识点</label>
       <div className="tag-input"><input id={tagInputId} value={tagInput} list="knowledge-tags" placeholder="输入标签，按回车添加"
@@ -236,21 +253,25 @@ function QuestionFields({ entry, update }) {
       <div className="chips">{content.tags.map(tag => <button key={tag} type="button" className="chip chip-remove" aria-label={`移除 ${tag}`}
         onClick={() => update({ content: { ...content, tags: content.tags.filter(item => item !== tag) } })}>{tag}<X size={12} /></button>)}</div>
     </div>
-    <label>补充说明<textarea {...field('notes')} maxLength={textFields.notes.max} rows={3} placeholder="记录易错点或追问" /></label>
+    <MarkdownField {...markdownField('notes', 3, '记录易错点或追问')} />
   </>;
 }
 
-function QuestionEditor({ initial, draft, multiple, companies, tags, topics, onClose, onSave, onApprove }) {
+function QuestionEditor({ initial, draft, multiple, companies, tags, topics, ownerId, onClose, onSave, onApprove }) {
   const [metadata, setMetadata] = useState(() => {
     const { topic, category, company, recruitment } = initial;
     return { topic, category, company, recruitment };
   });
   const [entries, setEntries] = useState([{ id: 0, content: initial, tagInput: '' }]);
+  const [source, setSource] = useState(initial.source);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const dialog = useRef(null);
   const nextId = useRef(1);
   const addedId = useRef(null);
+  const staged = useRef(new Map());
+  const matchedTopic = topics.get(topicKey({ ...metadata, topic: metadata.topic.trim(), company: metadata.company.trim() }));
+  const inheritedSource = multiple ? matchedTopic?.source : '';
   useEffect(() => { dialog.current.showModal(); }, []);
   useEffect(() => {
     if (addedId.current === null) return;
@@ -286,13 +307,15 @@ function QuestionEditor({ initial, draft, multiple, companies, tags, topics, onC
       const questions = entries.map(({ content, tagInput }, index) => {
         try {
           return normalizeQuestion({
-            ...content, topic, company, category, recruitment, tags: [...content.tags, ...splitTags(tagInput)],
+            ...content, topic, company, category, recruitment, source: inheritedSource || source,
+            tags: [...content.tags, ...splitTags(tagInput)],
           });
         } catch (failure) {
           if (entries.length === 1) throw failure;
           throw new Error(`第 ${index + 1} 题 · ${errorText(failure)}`);
         }
       });
+      await saveImages(ownerId, questions, staged.current);
       if (event.nativeEvent.submitter?.value === 'approve') await onApprove(questions[0]);
       else await onSave(questions);
       onClose();
@@ -312,7 +335,7 @@ function QuestionEditor({ initial, draft, multiple, companies, tags, topics, onC
       {draft?.base_content && <aside className="original">
         <h3>提交草稿时的原题</h3><Metadata question={draft.base_content} />
         {draft.base_content.topic && <p className="muted original-prompt">主题 · {draft.base_content.topic}</p>}
-        <p className="prewrap original-prompt">{draft.base_content.prompt}</p><QuestionDetails question={draft.base_content} />
+        <MarkdownText className="original-prompt">{draft.base_content.prompt}</MarkdownText><QuestionDetails question={draft.base_content} />
       </aside>}
       <form className="editor-form" onSubmit={submit}>
         {topics.size > 0 && <label>沿用已有主题<select value={topics.has(topicKey(metadata)) ? topicKey(metadata) : ''} onChange={selectTopic}>
@@ -335,7 +358,9 @@ function QuestionEditor({ initial, draft, multiple, companies, tags, topics, onC
           <label>招聘类型<select {...field('recruitment')}>{Object.entries(recruitmentLabels).map(([key, label]) =>
             <option key={key} value={key}>{label}</option>)}</select></label>
         </div>
-        {multiple && <p className="editor-hint">本次录入的题目共用上方的主题和招聘信息。</p>}
+        <label>{inheritedSource ? '主题来源（自动沿用）' : '来源'}<input value={inheritedSource || source} readOnly={Boolean(inheritedSource)}
+          onChange={event => setSource(event.target.value)} maxLength={textFields.source.max} placeholder="网页链接或来源说明" /></label>
+        {multiple && <p className="editor-hint">本次录入的题目共用主题、招聘信息和来源。</p>}
         <datalist id="knowledge-tags">{tags.map(tag => <option key={tag} value={tag} />)}</datalist>
         {entries.map((entry, index) => <section className={multiple ? 'editor-question editor-question-card' : 'editor-question'}
           key={entry.id} aria-labelledby={multiple ? `question-title-${entry.id}` : undefined}>
@@ -344,7 +369,7 @@ function QuestionEditor({ initial, draft, multiple, companies, tags, topics, onC
             {entries.length > 1 && <button type="button" className="icon-button" aria-label={`移除第 ${index + 1} 题`} disabled={pending}
               onClick={() => setEntries(current => current.filter(item => item.id !== entry.id))}><Trash2 size={16} /></button>}
           </div>}
-          <QuestionFields entry={entry} update={change => updateEntry(entry.id, change)} />
+          <QuestionFields entry={entry} update={change => updateEntry(entry.id, change)} staged={staged.current} pending={pending} />
         </section>)}
         {error && <p className="notice error" role="alert">{error}</p>}
         <div className="dialog-actions">
@@ -371,7 +396,7 @@ function Confirm({ title, detail, busy, onCancel, onConfirm }) {
   </dialog>;
 }
 
-function Bank() {
+function Bank({ ownerId }) {
   const [hash, setHash] = useState(() => location.hash.slice(1));
   const [path, query] = hash.split('?');
   const route = path === 'exam' || Object.hasOwn(tabs, path) ? path : 'library';
@@ -500,6 +525,7 @@ function Bank() {
         <button className="icon-button" aria-label="刷新题库" title="刷新题库" disabled={busy || loading}
           onClick={() => { setNotice(null); refresh(); }}><RefreshCw size={17} /></button>
         <button className="icon-button" aria-label="退出登录" title="退出登录" onClick={() => result(db.auth.signOut()).catch(report)}><LogOut size={17} /></button>
+        <RepositoryLink />
       </div>
     </div></header>
     <main className="page dashboard">
@@ -518,6 +544,7 @@ function Bank() {
       {topic && <section className="section-heading topic-heading">
         <a className="back-link" href="#library"><ArrowLeft size={16} />返回题库</a>
         <h1>{topic.content.topic}</h1><Metadata question={{ ...topic.content, tags: [] }} />
+        {topic.source && <div className="topic-source"><span>来源</span><Source value={topic.source} /></div>}
         <div className="hero-actions">
           {route !== 'library' && <a className="button secondary" href={topicLink('library', topic.key)}>学习题目</a>}
           {route !== 'practice' && <a className="button secondary" href={topicLink('practice', topic.key)}>逐题练习</a>}
@@ -537,13 +564,14 @@ function Bank() {
       {loading && !questions.length && !drafts.length ? <p className="loading" role="status">正在读取题库…</p>
         : (selectedTopic && route !== 'drafts' && !topic) || (route === 'exam' && !topic) ? <Empty title="找不到这个主题" detail="题目可能已移到其他主题。"
           action={<a className="button secondary" href="#library">返回题库</a>} />
-        : route === 'exam' ? <Exam key={topic.key} rows={topic.rows} />
-        : route === 'practice' ? <Practice key={topic?.key ?? JSON.stringify(filters)} rows={topic?.rows ?? filtered} busy={busy}
+        : route === 'exam' ? <Exam key={topic.key} rows={topic.rows} sharedSource={topic.source} />
+        : route === 'practice' ? <Practice key={topic?.key ?? JSON.stringify(filters)} rows={topic?.rows ?? filtered} busy={busy} sharedSource={topic?.source}
           onMark={(row, mastery) => mutate(() => updateRow('questions', row, { mastery })).catch(report)} />
         : route === 'drafts' ? (drafts.length ? <div className="card-list">{drafts.map(row => <article className="card draft-card" key={row.id}>
           <span className="tile-icon"><FileText size={20} /></span>
           <div className="draft-copy"><span className="eyebrow">{row.question_id ? '修改建议' : '新增题目'}</span>
-            <h3>{row.content.prompt}</h3>{row.content.topic && <p className="muted draft-topic">{row.content.topic}</p>}<Metadata question={row.content} /></div>
+            <MarkdownText className="question-prompt">{row.content.prompt}</MarkdownText>
+            {row.content.topic && <p className="muted draft-topic">{row.content.topic}</p>}<Metadata question={row.content} /></div>
           <div className="card-actions"><button className="icon-button" onClick={() => setDeletion({ row, draft: true })} aria-label="丢弃草稿"><Trash2 size={17} /></button>
             <button className="button secondary" onClick={() => setEditor({ row, draft: true })}>审核<ChevronRight size={16} /></button></div>
         </article>)}</div> : <Empty title="暂时没有草稿" detail="从 Codex 提交题目，或导入 JSON 后，草稿会出现在这里。" />)
@@ -560,13 +588,13 @@ function Bank() {
           <div className="question-head"><Metadata question={row.content} mastery={row.mastery} />
             <div className="card-actions"><button className="icon-button" onClick={() => setEditor({ row })} aria-label="编辑题目"><Pencil size={17} /></button>
               <button className="icon-button" onClick={() => setDeletion({ row })} aria-label="删除题目"><Trash2 size={17} /></button></div></div>
-          <h3 className="prewrap">{row.content.prompt}</h3><QuestionDetails question={row.content} />
+          <MarkdownText className="question-prompt">{row.content.prompt}</MarkdownText><QuestionDetails question={row.content} sharedSource={topic?.source} />
         </article>)}</div> : <Empty title={questions.length ? '没有匹配的题目' : '从第一道题开始'}
           detail={questions.length ? '换个公司、知识点或掌握状态试试。' : '录入题干和参考答案，之后可以随时回来练习。'}
           action={!questions.length ? newButton : null} />)}
     </main>
     {editor && <QuestionEditor initial={editor.row?.content ?? editor.initial ?? emptyQuestion} draft={editor.draft ? editor.row : null} multiple={!editor.row}
-      companies={companies} tags={tags} topics={topics} onClose={() => setEditor(null)} onSave={save} onApprove={approve} />}
+      companies={companies} tags={tags} topics={topics} ownerId={ownerId} onClose={() => setEditor(null)} onSave={save} onApprove={approve} />}
     {deletion && <Confirm busy={busy} title={deletion.draft ? '丢弃这条草稿？' : '删除这道题？'}
       detail={deletion.draft ? '草稿会从待审核列表移除。' : '题目及其掌握状态将被删除。'} onCancel={() => setDeletion(null)} onConfirm={remove} />}
   </>;

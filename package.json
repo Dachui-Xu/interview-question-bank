@@ -13,7 +13,10 @@
     "@supabase/supabase-js": "2.95.3",
     "lucide-react": "0.511.0",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "react-markdown": "10.1.0",
+    "remark-breaks": "4.0.0",
+    "remark-gfm": "4.0.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",
