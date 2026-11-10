@@ -96,6 +96,7 @@ input::placeholder, textarea::placeholder { color: #6e7582; }
 .section-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 26px 0 12px; }
 .section-line h2 { display: flex; align-items: baseline; gap: 9px; }
 .section-line small { color: var(--muted); font-weight: 550; letter-spacing: 0; font-size: .82rem; }
+.section-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .section-heading { margin: 20px 0 24px; }
 .section-heading h1 { margin: 11px 0 8px; font-size: clamp(2rem, 5vw, 3.45rem); }
 .card-list { display: grid; gap: 11px; }

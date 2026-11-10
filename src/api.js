@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { questionImageBucket } from './question-images';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -21,6 +22,10 @@ export async function result(request) {
   const { data, error } = await request;
   if (error) throw error;
   return data;
+}
+
+export function downloadQuestionImage(ownerId, name) {
+  return result(db.storage.from(questionImageBucket).download(`${ownerId}/${name}`));
 }
 
 async function listAll(table) {

@@ -7,7 +7,7 @@ import {
 import {
   categories, emptyQuestion, masteryLabels, normalizeQuestion, parseQuestionFile, recruitmentLabels, sourceUrl, textFields, topicKey,
 } from '../supabase/functions/_shared/question.mjs';
-import { db, errorText, loadBank, result, updateRow } from './api';
+import { db, downloadQuestionImage, errorText, loadBank, result, updateRow } from './api';
 import { ImageOwner, MarkdownField, MarkdownText, saveImages } from './markdown';
 import './style.css';
 
@@ -407,6 +407,7 @@ function Bank({ ownerId }) {
   const [deletion, setDeletion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState(null);
   const importInput = useRef(null);
   const loadingVersion = useRef(0);
@@ -473,14 +474,27 @@ function Bank({ ownerId }) {
     }
   }
 
-  function download() {
-    const contents = JSON.stringify({ schemaVersion: 1, questions: questions.map(row => row.content) }, null, 2);
-    const url = URL.createObjectURL(new Blob([contents], { type: 'application/json;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'interview-questions.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  async function download() {
+    setExporting(true);
+    setNotice(null);
+    try {
+      const { createMarkdownExport } = await import('./export-markdown');
+      const file = await createMarkdownExport({
+        rows: topic?.rows ?? questions, topic, downloadImage: name => downloadQuestionImage(ownerId, name),
+      });
+      const url = URL.createObjectURL(file.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      report(error);
+    } finally {
+      setExporting(false);
+    }
   }
 
   function save(contents) {
@@ -554,7 +568,13 @@ function Bank({ ownerId }) {
       {!selectedTopic && (route === 'library' || route === 'practice') && <Filters filters={filters} setFilters={setFilters} companies={companies} tags={tags} />}
       {route === 'library' && <div className="section-line">
         <h2>{topic ? '主题题目' : '题目与主题'} <small>{topic ? topic.rows.length : filtered.length} 题</small></h2>
-        {topic ? newButton : <button className="button secondary" onClick={download} disabled={loading || !questions.length}><ArrowDownToLine size={16} />导出 JSON</button>}
+        <div className="section-actions">
+          <button className="button secondary" onClick={download}
+            disabled={exporting || loading || (selectedTopic && !topic) || !(topic?.rows.length ?? questions.length)}>
+            <ArrowDownToLine size={16} />{exporting ? '正在导出…' : '导出 Markdown'}
+          </button>
+          {topic && newButton}
+        </div>
       </div>}
       {route === 'drafts' && <div className="section-line">
         <h2>待处理 <small>{drafts.length} 条</small></h2>

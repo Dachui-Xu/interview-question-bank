@@ -11,12 +11,16 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.95.3",
+    "fflate": "0.8.2",
     "lucide-react": "0.511.0",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "react-markdown": "10.1.0",
     "remark-breaks": "4.0.0",
-    "remark-gfm": "4.0.1"
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.2.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",

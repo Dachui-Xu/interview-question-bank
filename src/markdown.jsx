@@ -1,13 +1,12 @@
 import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { db, result } from './api';
+import { db, downloadQuestionImage, result } from './api';
+import { questionImageBucket as bucket, questionImageName } from './question-images';
 
-const bucket = 'question-images';
 const extensions = new Map([
   ['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/webp', 'webp'],
   ['image/gif', 'gif'], ['image/avif', 'avif'],
 ]);
-const imagePath = /^question-images\/([a-f0-9-]{36}\.(?:png|jpg|webp|gif|avif))$/;
 const textFields = ['prompt', 'answer', 'notes'];
 export const ImageOwner = createContext(null);
 const StagedImages = createContext(null);
@@ -21,7 +20,7 @@ function SavedImage({ name, alt, file }) {
     let objectUrl;
     async function load() {
       try {
-        const blob = file ?? await result(db.storage.from(bucket).download(`${ownerId}/${name}`));
+        const blob = file ?? await downloadQuestionImage(ownerId, name);
         if (!active) return;
         objectUrl = URL.createObjectURL(blob);
         setState({ name, url: objectUrl });
@@ -41,7 +40,7 @@ function SavedImage({ name, alt, file }) {
 
 function MarkdownImage({ src, alt }) {
   const staged = useContext(StagedImages);
-  const name = imagePath.exec(src)?.[1];
+  const name = questionImageName(src);
   if (name) return <SavedImage key={name} name={name} alt={alt} file={staged?.get(name)?.file} />;
   if (/^https?:\/\//i.test(src)) return <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />;
   return <span className="markdown-image-status">{alt || '图片地址不可用'}</span>;

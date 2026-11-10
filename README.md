@@ -51,6 +51,8 @@ codex mcp list
 
 可以让 Codex「找出大疆校招里知识点为 RTOS、掌握状态为模糊的题，读出参考答案并总结」或「把这道题整理成 2026 年大疆固件开发主题下的新题草稿」。修改正式题目前，Codex 先用 `get_question` 取得完整内容和版本，再提交修改草稿。草稿经网页确认后入库。发生版本冲突时，先检查当前题目，再基于最新版本提交新的修改草稿。
 
-## JSON 交换
+## 导出和导入
 
-题库页的「导出 JSON」包含正式题目的内容、主题和招聘类型。草稿页可以导入 [示例文件](examples/questions.v1.json) 同格式的数据，导入的记录作为待审核新题出现。类别用 `written` 或 `interview`，招聘类型用 `campus`、`experienced` 或 `unspecified`。主题留空时，题目按单题展示。文件有格式错误时，导入会在写入前指出具体题号。
+题库页和主题页均可导出 Markdown。题干、答案和补充说明保留原始 Markdown。题目含上传图片时，下载的 ZIP 内含 Markdown 文件及 `question-images` 目录。解压后打开 Markdown 即可查看图片。外链图片保留原链接。
+
+草稿页可以导入 [示例文件](examples/questions.v1.json) 同格式的 JSON 数据，导入的记录作为待审核新题出现。类别用 `written` 或 `interview`，招聘类型用 `campus`、`experienced` 或 `unspecified`。主题留空时，题目按单题展示。文件有格式错误时，导入会在写入前指出具体题号。
