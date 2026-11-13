@@ -1,7 +1,8 @@
 import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState } from 'react';
-import { ImagePlus } from 'lucide-react';
+import { Bold, Code, ImagePlus, Italic } from 'lucide-react';
 import { db, downloadQuestionImage, result } from './api';
 import { questionImageBucket as bucket, questionImageName } from './question-images';
+import { clipboardMarkdown } from './markdown-paste';
 
 const extensions = new Map([
   ['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/webp', 'webp'],
@@ -11,6 +12,11 @@ const textFields = ['prompt', 'answer', 'notes'];
 export const ImageOwner = createContext(null);
 const StagedImages = createContext(null);
 const MarkdownRenderer = lazy(() => import('./markdown-renderer'));
+const formats = [
+  { label: '加粗', icon: Bold, marker: '**', key: 'b' },
+  { label: '斜体', icon: Italic, marker: '*', key: 'i' },
+  { label: '行内代码', icon: Code, marker: '`' },
+];
 
 function SavedImage({ name, alt, file }) {
   const ownerId = useContext(ImageOwner);
@@ -77,6 +83,73 @@ export function MarkdownField({ id, label, value, onChange, maxLength, rows, req
   const input = useRef(null);
   const textarea = useRef(null);
 
+  function replaceSelection(start, end, text, selectionStart = start + text.length, selectionEnd = selectionStart) {
+    const editor = textarea.current;
+    if (editor.value.length - (end - start) + text.length > maxLength) {
+      setError(`${label}超过长度限制，请缩短内容后再试。`);
+      return;
+    }
+    editor.focus();
+    editor.setSelectionRange(start, end);
+    // Use the browser's editing history when it supports text insertion.
+    if (!document.execCommand?.('insertText', false, text)) {
+      editor.setRangeText(text, start, end);
+      onChange(editor.value);
+    }
+    editor.setSelectionRange(selectionStart, selectionEnd);
+    setError('');
+  }
+
+  function applyFormat(marker) {
+    const { selectionStart, selectionEnd, value: text } = textarea.current;
+    let start = selectionStart;
+    let end = selectionEnd;
+    let selected = text.slice(start, end);
+    if (selected && !selected.trim()) {
+      start = end;
+      selected = '';
+    } else if (selected) {
+      start += selected.length - selected.trimStart().length;
+      selected = selected.trim();
+      end = start + selected.length;
+    }
+    const wrapsSelection = selected.startsWith(marker) && selected.endsWith(marker)
+      && (marker !== '*' || !selected.startsWith('**') || selected.startsWith('***'));
+    const wrapsInEditor = start >= marker.length && text.slice(start - marker.length, start) === marker
+      && text.startsWith(marker, end)
+      && (marker !== '*' || /(?<!\*)\*(?:\*\*)*$/.test(text.slice(0, start)));
+    if (selected.length >= marker.length * 2 && wrapsSelection) {
+      const unwrapped = selected.slice(marker.length, -marker.length);
+      replaceSelection(start, end, unwrapped, start, start + unwrapped.length);
+    } else if (wrapsInEditor) {
+      replaceSelection(start - marker.length, end + marker.length, selected, start - marker.length, end - marker.length);
+    } else {
+      const selection = start + marker.length;
+      replaceSelection(start, end, marker + selected + marker, selection, selection + selected.length);
+    }
+  }
+
+  function handlePaste(event) {
+    let text;
+    try {
+      text = clipboardMarkdown(event.clipboardData);
+    } catch {
+      return;
+    }
+    if (text === null) return;
+    event.preventDefault();
+    const { selectionStart, selectionEnd } = event.currentTarget;
+    replaceSelection(selectionStart, selectionEnd, text.replace(/\r\n?/g, '\n'));
+  }
+
+  function handleShortcut(event) {
+    if (event.nativeEvent.isComposing || (!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) return;
+    const format = formats.find(item => item.key === event.key.toLowerCase());
+    if (!format) return;
+    event.preventDefault();
+    if (!event.repeat) applyFormat(format.marker);
+  }
+
   function insert(files) {
     const images = [...files];
     if (pending || !images.length) return;
@@ -110,6 +183,11 @@ export function MarkdownField({ id, label, value, onChange, maxLength, rows, req
     <div className="markdown-field-head">
       <label htmlFor={id}>{label}</label>
       <div className="markdown-tools">
+        {!preview && formats.map(({ label: format, icon: Icon, marker, key }) =>
+          <button key={format} type="button" disabled={pending} className="markdown-tool format-tool"
+            aria-label={format} title={key ? format + '（Ctrl / ⌘ + ' + key.toUpperCase() + '）' : format}
+            aria-keyshortcuts={key ? 'Control+' + key.toUpperCase() + ' Meta+' + key.toUpperCase() : undefined}
+            onMouseDown={event => event.preventDefault()} onClick={() => applyFormat(marker)}><Icon size={15} /></button>)}
         <input ref={input} type="file" accept={[...extensions.keys()].join(',')} multiple hidden
           onChange={event => { insert(event.target.files); event.target.value = ''; }} />
         <button type="button" disabled={pending} className="markdown-tool" onClick={() => input.current.click()}
@@ -121,6 +199,7 @@ export function MarkdownField({ id, label, value, onChange, maxLength, rows, req
       </div>
     </div>
     <textarea ref={textarea} id={id} value={value} onChange={event => onChange(event.target.value)}
+      onPaste={handlePaste} onKeyDown={handleShortcut}
       maxLength={maxLength} rows={rows} required={required && !preview} disabled={pending} hidden={preview} placeholder={placeholder} />
     {preview && <div className="markdown-preview"><MarkdownText staged={staged}>{value || '暂无内容'}</MarkdownText></div>}
     {error && <p className="editor-hint image-error" role="alert">{error}</p>}

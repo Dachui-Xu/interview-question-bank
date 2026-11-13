@@ -16,6 +16,8 @@ export const textFields = {
   notes: { label: '补充说明', max: 12000 },
 };
 
+const markdownFields = new Set(['prompt', 'answer', 'notes']);
+
 export function normalizeQuestion(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('每题需要是一个 JSON 对象');
@@ -33,7 +35,8 @@ export function normalizeQuestion(input) {
     const value = input[field] ?? '';
     if (typeof value !== 'string') throw new Error(`${label}应为文字`);
     if (value.includes('\0')) throw new Error(`${label}含有无效字符`);
-    content[field] = value.trim();
+    const trimmed = value.trim();
+    content[field] = markdownFields.has(field) && trimmed ? value : trimmed;
     if (content[field].length > max) throw new Error(`${label}最多 ${max} 字符`);
   }
   if (!content.prompt) throw new Error('请填写题干');

@@ -23,6 +23,16 @@ test('JSON 往返保留主题与招聘类型，并指出无效题号', () => {
   assert.equal(sourceUrl('javascript:alert(1)'), null);
 });
 
+test('保存 Markdown 时保留缩进代码和换行，同时修剪公司名', () => {
+  const content = normalizeQuestion({
+    category: 'written', prompt: '    x = 1\n    y = 2\n', answer: '第一行  \n第二行\n', company: ' 公司 ',
+  });
+  assert.equal(content.prompt, '    x = 1\n    y = 2\n');
+  assert.equal(content.answer, '第一行  \n第二行\n');
+  assert.equal(content.company, '公司');
+  assert.throws(() => normalizeQuestion({ ...content, prompt: ' \n\t ' }), /请填写题干/);
+});
+
 test('Postgres 隔离题库，限制 MCP 权限，事务审核草稿并检查版本', async () => {
   const db = new PGlite();
   try {

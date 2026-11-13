@@ -177,8 +177,9 @@ dialog::backdrop { background: #18243959; backdrop-filter: blur(3px); }
 .tag-editor { display: grid; gap: 6px; }
 .markdown-field { min-width: 0; display: grid; gap: 5px; }
 .markdown-field-head, .markdown-tools { display: flex; align-items: center; gap: 4px; }
-.markdown-field-head { justify-content: space-between; }
+.markdown-field-head { justify-content: space-between; flex-wrap: wrap; }
 .markdown-tool { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--accent); font-size: .8rem; }
+.format-tool { min-width: 30px; justify-content: center; padding-inline: 6px; }
 .markdown-tool:hover, .markdown-tool[aria-pressed="true"] { background: var(--accent-soft); }
 .markdown-preview { min-height: 74px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
 .image-error { color: #922531; }
