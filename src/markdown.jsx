@@ -8,7 +8,6 @@ const extensions = new Map([
   ['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/webp', 'webp'],
   ['image/gif', 'gif'], ['image/avif', 'avif'],
 ]);
-const textFields = ['prompt', 'answer', 'notes'];
 export const ImageOwner = createContext(null);
 const StagedImages = createContext(null);
 const MarkdownRenderer = lazy(() => import('./markdown-renderer'));
@@ -67,9 +66,9 @@ export function MarkdownText({ children, className = '', staged }) {
   </StagedImages.Provider>;
 }
 
-export async function saveImages(ownerId, questions, staged) {
+export async function saveImages(ownerId, texts, staged) {
   for (const [name, image] of staged) {
-    if (image.uploaded || !questions.some(question => textFields.some(field => question[field].includes(`${bucket}/${name}`)))) continue;
+    if (image.uploaded || !texts.some(text => text.includes(`${bucket}/${name}`))) continue;
     await result(db.storage.from(bucket).upload(`${ownerId}/${name}`, image.file, {
       contentType: image.file.type, cacheControl: '0',
     }));

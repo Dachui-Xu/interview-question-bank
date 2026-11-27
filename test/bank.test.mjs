@@ -47,6 +47,7 @@ test('Postgres 隔离题库，限制 MCP 权限，事务审核草稿并检查版
       grant usage on schema auth to authenticated, anon, service_role;
     `);
     await db.exec(await readFile(new URL('../supabase/migrations/20261110000000_question_bank.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20261127000000_learning_materials.sql', import.meta.url), 'utf8'));
     const owner = 'e5a35756-b2b2-411f-b49b-98c3d00895fe';
     const other = '3c536022-c785-4735-8898-de26f38fd459';
     await db.query('insert into auth.users(id) values ($1), ($2)', [owner, other]);
@@ -56,14 +57,29 @@ test('Postgres 隔离题库，限制 MCP 权限，事务审核草稿并检查版
     };
 
     await switchRole('anon');
+    await assert.rejects(db.query('select * from public.learning_materials'), /permission denied/);
     await assert.rejects(db.query('select * from public.questions'), /permission denied/);
     await assert.rejects(db.query('insert into public.questions(content) values ($1)', [question]), /permission denied/);
 
     await switchRole('authenticated', owner);
+    const stage = { title: '基础', topic: topicKey(question), notes: '**时序**', done: false };
+    const route = { title: '固件开发', company: '', author: '', source: '', body: '', steps: [stage] };
+    const addMaterial = (kind, doc) => db.query('insert into public.learning_materials(kind, content) values ($1, $2) returning *', [kind, doc]);
+    await assert.rejects(addMaterial('roadmaps', { ...route, steps: [] }), /check constraint/);
+    await assert.rejects(addMaterial('experiences', route), /check constraint/);
+    await assert.rejects(addMaterial('roadmaps', { ...route, steps: [{ ...stage, done: 'yes' }] }), /check constraint/);
+    await addMaterial('experiences', { ...route, steps: [], source: 'https://example.org' });
+    const { rows: [material] } = await addMaterial('roadmaps', route);
+    const updatedRoute = { ...route, steps: [{ ...stage, done: true }] };
+    const mark = () => db.query('update public.learning_materials set content = $1 where id = $2 and version = 1 returning version', [updatedRoute, material.id]);
+    assert.equal((await mark()).rows[0].version, 2);
+    assert.equal((await mark()).rows.length, 0);
     const { rows: [initial] } = await db.query('insert into public.questions(content) values ($1) returning *', [question]);
     assert.equal(initial.version, 1);
 
     await switchRole('authenticated', other);
+    assert.equal((await db.query('select * from public.learning_materials')).rows.length, 0);
+    assert.equal((await db.query('delete from public.learning_materials where id = $1 returning id', [material.id])).rows.length, 0);
     assert.equal((await db.query('select * from public.questions')).rows.length, 0);
     assert.equal((await db.query("update public.questions set mastery = 'known' where id = $1 returning id", [initial.id])).rows.length, 0);
     await assert.rejects(db.query('insert into public.questions(owner_id, content) values ($1, $2)', [owner, question]), /permission denied/);

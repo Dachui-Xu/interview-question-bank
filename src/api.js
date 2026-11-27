@@ -28,15 +28,19 @@ export function downloadQuestionImage(ownerId, name) {
   return result(db.storage.from(questionImageBucket).download(`${ownerId}/${name}`));
 }
 
-async function listAll(table) {
+async function listAll(table, columns = '*', filters = {}) {
   const rows = [];
   const pageSize = 200;
   for (let offset = 0; ; offset += pageSize) {
-    const page = await result(db.from(table).select('*').order('created_at', { ascending: false })
+    const page = await result(db.from(table).select(columns).match(filters).order('created_at', { ascending: false })
       .order('id').range(offset, offset + pageSize - 1));
     rows.push(...page);
     if (page.length < pageSize) return rows;
   }
+}
+
+export function listMaterials(kind) {
+  return listAll('learning_materials', 'id,title:content->>title,company:content->>company,author:content->>author', { kind });
 }
 
 export async function loadBank() {

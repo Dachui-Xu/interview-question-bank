@@ -9,9 +9,10 @@ import {
 } from '../supabase/functions/_shared/question.mjs';
 import { db, downloadQuestionImage, errorText, loadBank, result, updateRow } from './api';
 import { ImageOwner, MarkdownField, MarkdownText, saveImages } from './markdown';
+import { LearningSpace } from './learning';
 import './style.css';
 
-const tabs = { library: '题库', practice: '练习', drafts: '草稿' };
+const tabs = { library: '题库', practice: '练习', experiences: '网友经验', roadmaps: '学习路线', drafts: '草稿' };
 const emptyFilters = { company: '', tag: '', category: '', recruitment: '', mastery: '' };
 const topicLink = (route, key) => `#${route}?${new URLSearchParams({ topic: key })}`;
 
@@ -315,7 +316,7 @@ function QuestionEditor({ initial, draft, multiple, companies, tags, topics, own
           throw new Error(`第 ${index + 1} 题 · ${errorText(failure)}`);
         }
       });
-      await saveImages(ownerId, questions, staged.current);
+      await saveImages(ownerId, questions.flatMap(q => [q.prompt, q.answer, q.notes]), staged.current);
       if (event.nativeEvent.submitter?.value === 'approve') await onApprove(questions[0]);
       else await onSave(questions);
       onClose();
@@ -400,7 +401,10 @@ function Bank({ ownerId }) {
   const [hash, setHash] = useState(() => location.hash.slice(1));
   const [path, query] = hash.split('?');
   const route = path === 'exam' || Object.hasOwn(tabs, path) ? path : 'library';
-  const selectedTopic = new URLSearchParams(query).get('topic');
+  const isLearning = route === 'experiences' || route === 'roadmaps';
+  const params = new URLSearchParams(query);
+  const selectedTopic = !isLearning && params.get('topic');
+  const [refreshKey, setRefreshKey] = useState(0);
   const [bank, setBank] = useState({ questions: [], drafts: [] });
   const [filters, setFilters] = useState(emptyFilters);
   const [editor, setEditor] = useState(null);
@@ -537,7 +541,7 @@ function Bank({ ownerId }) {
         aria-current={route === key || (route === 'exam' && key === 'practice') ? 'page' : undefined}>{label}{key === 'drafts' && drafts.length > 0 && <span className="nav-count">{drafts.length}</span>}</a>)}</nav>
       <div className="toolbar">
         <button className="icon-button" aria-label="刷新题库" title="刷新题库" disabled={busy || loading}
-          onClick={() => { setNotice(null); refresh(); }}><RefreshCw size={17} /></button>
+          onClick={() => { setNotice(null); setRefreshKey(value => value + 1); refresh(); }}><RefreshCw size={17} /></button>
         <button className="icon-button" aria-label="退出登录" title="退出登录" onClick={() => result(db.auth.signOut()).catch(report)}><LogOut size={17} /></button>
         <RepositoryLink />
       </div>
@@ -581,7 +585,9 @@ function Bank({ ownerId }) {
         <input type="file" ref={importInput} accept=".json,application/json" hidden onChange={importFile} />
         <button className="button secondary" onClick={() => importInput.current.click()} disabled={busy || loading}><Upload size={16} />导入 JSON</button>
       </div>}
-      {loading && !questions.length && !drafts.length ? <p className="loading" role="status">正在读取题库…</p>
+      {isLearning ? <LearningSpace key={route} kind={route} id={params.get('id')} refreshKey={refreshKey}
+        ownerId={ownerId} companies={companies} topics={topics} topicLink={topicLink} Confirm={Confirm} />
+        : loading && !questions.length && !drafts.length ? <p className="loading" role="status">正在读取题库…</p>
         : (selectedTopic && route !== 'drafts' && !topic) || (route === 'exam' && !topic) ? <Empty title="找不到这个主题" detail="题目可能已移到其他主题。"
           action={<a className="button secondary" href="#library">返回题库</a>} />
         : route === 'exam' ? <Exam key={topic.key} rows={topic.rows} sharedSource={topic.source} />

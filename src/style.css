@@ -224,3 +224,34 @@ dialog::backdrop { background: #18243959; backdrop-filter: blur(3px); }
 @media (max-width: 360px) {
   .nav-count { display: none; }
 }
+
+.material-fields { margin: 0; padding: 0; border: 0; }
+.material-heading-line, .material-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.material-heading-line { justify-content: space-between; }
+.material-heading h1 { flex: 1 1 15rem; overflow-wrap: anywhere; }
+.material-meta { color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+.material-filters label { flex: 1 1 12rem; }
+.material-filters label:first-child { flex-grow: 3; }
+.material-count { color: var(--muted); font-size: .88rem; margin: 22px 0 10px; }
+.material-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.material-card { display: grid; align-content: space-between; gap: 14px; color: var(--ink); }
+.material-card:hover { border-color: #aabdaa; }
+.material-card h2 { font-size: 1.12rem; line-height: 1.55; overflow-wrap: anywhere; }
+.material-meta:empty { display: none; }
+.material-body { padding: clamp(18px, 4vw, 40px); }
+.material-body .markdown { max-width: 78ch; }
+.route-progress { width: 100%; accent-color: var(--accent); height: 7px; }
+.stage-list { display: grid; gap: 12px; list-style: none; padding: 0; }
+.stage-card { display: grid; gap: 12px; }
+.stage-card .button { justify-self: start; max-width: 100%; white-space: normal; }
+.stage-toggle { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.stage-toggle input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; flex: none; accent-color: var(--accent); }
+.stage-toggle span { display: grid; gap: 2px; overflow-wrap: anywhere; }
+.stage-toggle small { color: var(--muted); font-size: .83rem; }
+.stage-toggle strong { color: var(--ink); font-size: 1.1rem; }
+@media (max-width: 720px) {
+  .topbar-inner { grid-template-columns: auto 1fr; gap: 4px; padding-block: 6px; }
+  .topbar nav { grid-row: 2; grid-column: 1 / -1; justify-content: center; gap: 2px; }
+  .topbar nav a { min-width: 0; padding-inline: clamp(5px, 2vw, 12px); }
+  .material-filters label { flex-basis: 8rem; }
+}
