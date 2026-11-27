@@ -416,11 +416,11 @@ function Bank({ ownerId }) {
   const importInput = useRef(null);
   const loadingVersion = useRef(0);
 
-  async function refresh() {
+  async function refresh(force = false) {
     const version = ++loadingVersion.current;
     setLoading(true);
     try {
-      const next = await loadBank();
+      const next = await loadBank(ownerId, { force });
       if (version === loadingVersion.current) setBank(next);
     } catch (error) {
       if (version === loadingVersion.current) setNotice({ error: true, text: errorText(error) });
@@ -458,7 +458,7 @@ function Bank({ ownerId }) {
     try {
       await action();
       setNotice(text ? { text } : null);
-      await refresh();
+      await refresh(true);
     } finally {
       setBusy(false);
     }
@@ -541,7 +541,7 @@ function Bank({ ownerId }) {
         aria-current={route === key || (route === 'exam' && key === 'practice') ? 'page' : undefined}>{label}{key === 'drafts' && drafts.length > 0 && <span className="nav-count">{drafts.length}</span>}</a>)}</nav>
       <div className="toolbar">
         <button className="icon-button" aria-label="刷新题库" title="刷新题库" disabled={busy || loading}
-          onClick={() => { setNotice(null); setRefreshKey(value => value + 1); refresh(); }}><RefreshCw size={17} /></button>
+          onClick={() => { setNotice(null); setRefreshKey(value => value + 1); refresh(true); }}><RefreshCw size={17} /></button>
         <button className="icon-button" aria-label="退出登录" title="退出登录" onClick={() => result(db.auth.signOut()).catch(report)}><LogOut size={17} /></button>
         <RepositoryLink />
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { categories, recruitmentLabels, sourceUrl } from '../supabase/functions/_shared/question.mjs';
-import { db, errorText, listMaterials, result, updateRow } from './api';
+import { db, errorText, loadMaterial, listMaterials, result, updateRow } from './api';
 import { MarkdownField, MarkdownText, saveImages } from './markdown';
 
 const table = 'learning_materials';
@@ -129,11 +129,12 @@ export function LearningSpace({ kind, id, ownerId, topics, companies, topicLink,
   useEffect(() => {
     const token = ++sequence.current;
     setError('');
-    const request = id ? result(db.from(table).select('*').eq('kind', kind).eq('id', id).maybeSingle()) : listMaterials(kind);
+    const options = { force: refreshKey > 0 || retry > 0 };
+    const request = id ? loadMaterial(kind, id, ownerId, options) : listMaterials(kind, ownerId, options);
     request.then(value => { if (sequence.current === token) setData({ id, value }); })
       .catch(failure => { if (sequence.current === token) setError(errorText(failure)); });
     return () => { sequence.current++; };
-  }, [kind, id, refreshKey, retry]);
+  }, [kind, id, ownerId, refreshKey, retry]);
   useEffect(() => { setEditing(null); setDeleting(null); }, [id]);
   const loaded = data?.id === id;
   const row = loaded && id ? data.value : null;
